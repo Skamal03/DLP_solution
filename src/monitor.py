@@ -5,6 +5,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from .logger import logger
 from .detector import PII_Detector
+from .usb_detector import get_removable_drives
 
 class FileEventHandler(FileSystemEventHandler):
     def __init__(self, detector):
@@ -35,7 +36,19 @@ class FileEventHandler(FileSystemEventHandler):
                 
             matches = self.detector.scan_text(content)
             if matches:
-                 logger.log_batch(source=f"file {file_path}", matches=matches)
+                 # Check if file is on a removable drive
+                 is_usb = False
+                 try:
+                     removable_drives = get_removable_drives()
+                     for drive in removable_drives:
+                         if file_path.lower().startswith(drive.lower()):
+                             is_usb = True
+                             break
+                 except:
+                     pass
+
+                 source_label = f"USB file {file_path}" if is_usb else f"file {file_path}"
+                 logger.log_batch(source=source_label, matches=matches)
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {e}")
 
@@ -67,27 +80,66 @@ class FileEventHandler(FileSystemEventHandler):
         return True
 
 class SystemMonitor:
-    def __init__(self, watch_path="."):
+    def __init__(self, watch_paths=None):
         self.detector = PII_Detector()
-        self.watch_path = watch_path
+        # Ensure watch_paths is a list. Default to current directory if None.
+        if watch_paths is None:
+            watch_paths = ["."]
+        elif isinstance(watch_paths, str):
+            watch_paths = [watch_paths]
+            
+        self.watch_paths = watch_paths
         self.observer = Observer()
         self.running = False
 
-    def scan_existing_files(self):
-        """Scans all existing files in the watch path on startup."""
-        logger.info(f"Performing initial scan of: {self.watch_path}")
+    def scan_existing_files(self, specific_path=None):
+        """Scans all existing files in the watch paths (or a specific one) on startup."""
+        paths_to_scan = [specific_path] if specific_path else self.watch_paths
+        
+        for path in paths_to_scan:
+            logger.info(f"Performing initial scan of: {os.path.abspath(path)}")
+            event_handler = FileEventHandler(self.detector)
+            # Walk through each watched path
+            if os.path.exists(path):
+                for root, dirs, files in os.walk(path):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        event_handler.process_file(file_path)
+            else:
+                logger.warning(f"Path not found: {path}")
+        
+        if not specific_path:
+            logger.info("Initial scan completed.")
+
+    def add_path(self, path):
+        """Dynamically adds a new path to the monitor."""
+        if path in self.watch_paths:
+            return
+            
+        if not os.path.isdir(path):
+            logger.warning(f"Cannot add path, not a directory: {path}")
+            return
+
+        logger.info(f"Adding new monitoring path: {path}")
+        self.watch_paths.append(path)
+        
+        # Schedule the observer
         event_handler = FileEventHandler(self.detector)
-        for root, dirs, files in os.walk(self.watch_path):
-            for file in files:
-                file_path = os.path.join(root, file)
-                event_handler.process_file(file_path)
-        logger.info("Initial scan completed.")
+        self.observer.schedule(event_handler, path, recursive=True)
+        
+        # Perform initial scan for this new path
+        self.scan_existing_files(specific_path=path)
 
     def start_filesystem_monitor(self):
-        logger.info(f"File system monitor started on: {os.path.abspath(self.watch_path)}")
-        
         event_handler = FileEventHandler(self.detector)
-        self.observer.schedule(event_handler, self.watch_path, recursive=True)
+        
+        for path in self.watch_paths:
+            if os.path.isdir(path):
+                self.observer.schedule(event_handler, path, recursive=True)
+                logger.info(f"File system monitor started on: {os.path.abspath(path)}")
+            else:
+                logger.warning(f"Directory not found, skipping: {path}")
+        
         self.observer.start()
 
     def start_clipboard_monitor(self, interval=1.0):

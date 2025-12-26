@@ -64,12 +64,34 @@ class ColoredFormatter(logging.Formatter):
         log_msg = super().format(record)
         
         # Add colors based on level
+        # Custom Color Logic
+        msg_lower = record.msg.lower()
+        
+        # 1. INFO Levels
+        if record.levelno == logging.INFO:
+            if "initial scan completed" in msg_lower or "performing initial scan" in msg_lower: # Green
+                return Fore.GREEN + log_msg + Style.RESET_ALL
+            elif "monitor started on" in msg_lower or "monitoring directories" in msg_lower or "external drive scanner" in msg_lower or "new external drive" in msg_lower: # Blue
+                return Fore.BLUE + log_msg + Style.RESET_ALL
+            elif "scanning file" in msg_lower: # Keep generic scanning info neutral or maybe blue? User said "scanning external drive info... blue"
+                # If specific requirements for "scanning user folders info messages blue", the above covers "monitoring directories".
+                pass
+
+        # 2. WARNING Levels (Detections)
         if record.levelno == logging.WARNING:
+            if "clipboard" in msg_lower: # Yellow
+                return Fore.YELLOW + log_msg + Style.RESET_ALL
+            elif "usb file" in msg_lower: # Purple
+                return Fore.MAGENTA + log_msg + Style.RESET_ALL
+            elif "file" in msg_lower: # Red (Local file default)
+                return Fore.RED + log_msg + Style.RESET_ALL
+            
+            # Default Warning Red
             return Fore.RED + log_msg + Style.RESET_ALL
-        elif record.levelno == logging.ERROR:
-            return Fore.RED + Style.BRIGHT + log_msg + Style.RESET_ALL
-        elif record.levelno == logging.CRITICAL:
-            return Fore.RED + Style.BRIGHT + log_msg + Style.RESET_ALL
+            
+        # 3. ERROR/CRITICAL
+        if record.levelno >= logging.ERROR:
+             return Fore.RED + Style.BRIGHT + log_msg + Style.RESET_ALL
         
         return log_msg
 
