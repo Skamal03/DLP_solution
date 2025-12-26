@@ -55,7 +55,7 @@ class FileEventHandler(FileSystemEventHandler):
         # 2. Ignore specific directories
         # Check if any part of the path is in ignored list
         parts = file_path.split(os.sep)
-        ignored_dirs = {'.git', '.vscode', '__pycache__', '.venv', 'env', 'src', '.gemini'}
+        ignored_dirs = {'.git', '.vscode', '__pycache__', '.venv', 'env', 'src', '.gemini', 'docs'}
         if any(p in ignored_dirs for p in parts):
             return False
 
