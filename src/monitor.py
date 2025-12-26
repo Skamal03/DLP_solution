@@ -130,17 +130,46 @@ class SystemMonitor:
         # Perform initial scan for this new path
         self.scan_existing_files(specific_path=path)
 
+    def remove_path(self, path):
+        """Stops monitoring a specific path."""
+        path = os.path.abspath(path)
+        if path not in self.watch_paths:
+            logger.warning(f"Path not found in monitor list: {path}")
+            return
+
+        logger.info(f"Removing monitoring path: {path}")
+        self.watch_paths.remove(path)
+        
+        # Watchdog doesn't easily support removing one watch. 
+        # We have to restart the observer with the remaining paths.
+        self.stop_filesystem_monitor()
+        self.start_filesystem_monitor()
+
     def start_filesystem_monitor(self):
+        if self.observer.is_alive():
+             # Already running
+             return
+
+        # Re-create observer in case it was stopped
+        self.observer = Observer()
         event_handler = FileEventHandler(self.detector)
         
+        assigned_watch = False
         for path in self.watch_paths:
             if os.path.isdir(path):
                 self.observer.schedule(event_handler, path, recursive=True)
                 logger.info(f"File system monitor started on: {os.path.abspath(path)}")
+                assigned_watch = True
             else:
                 logger.warning(f"Directory not found, skipping: {path}")
         
-        self.observer.start()
+        if assigned_watch:
+            self.observer.start()
+
+    def stop_filesystem_monitor(self):
+        if self.observer.is_alive():
+            self.observer.stop()
+            self.observer.join()
 
     def start_clipboard_monitor(self, interval=1.0):
         logger.info("Clipboard monitor started.")
@@ -167,7 +196,10 @@ class SystemMonitor:
                             
                 time.sleep(interval)
         except KeyboardInterrupt:
-            self.stop()
+             # Allow KeyboardInterrupt to propagate up to main menu
+             raise
+        except Exception as e:
+            logger.error(f"Clipboard Error: {e}")
 
     def start_all(self):
         self.start_filesystem_monitor()
@@ -175,6 +207,5 @@ class SystemMonitor:
 
     def stop(self):
         self.running = False
-        self.observer.stop()
-        self.observer.join()
+        self.stop_filesystem_monitor()
         logger.info("Monitors stopped.")
