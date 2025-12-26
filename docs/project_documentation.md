@@ -1,17 +1,27 @@
-# DLP Solution Documentation
+# Zer0Leaks - Data Leakage Prevention (DLP) Solution
 
 ## 1. How It Works
-The system acts as a background security guard for your computer. It continuously watches two main "exit points" where data often leaves an organization:
-1.  **File System**: It watches a specific folder. If you create or modify a file there, it immediately reads the content.
+The system acts as a background security guard for your computer. It continuously watches three main "exit points" where data often leaves an organization:
+1.  **File System**: It watches specified folders (including Desktop, Documents, Downloads). If you create or modify a file there, it immediately reads the content.
 2.  **Clipboard**: It checks whatever you "Copy" (Ctrl+C).
+3.  **External Drives (USB)**: It automatically detects when a USB drive is inserted and begins monitoring it for sensitive files.
 
-Once it captures text (from a file or clipboard), it sends it to the **Detector**, which scans it for sensitive information. If sensitive data is found, it logs a warning.
+Once it captures text, it sends it to the **Detector**, which scans it for sensitive information. If sensitive data is found, it logs a warning in color-coded text and saves it to a log file.
 
 ## 2. Features
+- **Interactive CLI Menu**: A user-friendly dashboard to add/remove directories, toggle USB scanning, and open logs while the tool runs.
+- **Visual Feedback**: 
+    - **Startup Banner**: Displays "Zer0Leaks" ASCII art with a clear status summary.
+    - **Color-Coded Logs**: 
+        - 🔴 **Red**: Monitoring Warnings (Local Files).
+        - 🟣 **Purple**: USB/External Drive Warnings.
+        - 🟡 **Yellow**: Clipboard Warnings.
+        - 🔵 **Blue**: Informational messages.
 - **Real-Time Clipboard Monitoring**: Detects sensitive data the moment it enters your clipboard.
-- **File System Monitoring**: Watch specific directories for new or modified files containing sensitive data.
-- **Hybrid Detection**: Uses both strict rules (Patterns) and smart guessing (AI/NLP).
-- **Logging**: Keeps a permanent record of all potential leaks in `dlp_log.log` and displays them in the console.
+- **File System Monitoring**: Watch specific directories (plus default user dirs) for new or modified files.
+- **USB Auto-Detection**: Automatically identifies Removable Media and adds it the monitoring list.
+- **Hybrid Detection**: Uses both strict rules (Regex) and smart guessing (AI/NLP).
+- **Startup Scan**: Scans existing files in watched directories immediately upon start.
 
 ## 3. What is NLP (Natural Language Processing)?
 **NLP** is a field of Artificial Intelligence that helps computers understand human language.
@@ -24,29 +34,29 @@ Once it captures text (from a file or clipboard), it sends it to the **Detector*
 ### Files
 | File | Purpose |
 | :--- | :--- |
-| `main.py` | The **Manager**. It handles arguments (which folder to watch) and starts the two monitors (File & Clipboard) simultaneously. |
-| `src/monitor.py` | The **Eyes**. It listens for file changes (using `watchdog`) and clipboard updates (using `pyperclip`). It reads the text and passes it to the detector. |
-| `src/detector.py` | The **Brain**. It contains the logic to decide if text is "sensitive". It holds the Regex patterns and loads the NLP model. |
-| `src/logger.py` | The **Scribe**. It ensures all detection events are printed to the screen and saved to a file (`dlp_log.log`). |
+| `main.py` | The **Manager**. Handles arguments, displays the Interactive Menu, and orchestrates the monitors. |
+| `src/monitor.py` | The **Eyes**. Listens for file changes (`watchdog`) and clipboard updates (`pyperclip`). Manages the list of watched paths dynamically. |
+| `src/detector.py` | The **Brain**. Decides if text is "sensitive". Holds Regex patterns and loads the Spacy NLP model. |
+| `src/logger.py` | The **Scribe**. Custom logging system that applies colors to the console and saves records to `dlp_log.log`. |
+| `src/banner.py` | The **Face**. Handles the ASCII art display and screen clearing logic. |
+| `src/usb_detector.py` | The **Gatekeeper**. Uses Windows API to find Removable Drives. |
 
 ### Libraries
 | Library | Role |
 | :--- | :--- |
-| **`watchdog`** | Efficiently waits for file system events (Create/Modify) without checking every millisecond. |
+| **`watchdog`** | Efficiently waits for file system events (Create/Modify). |
 | **`pyperclip`** | Allows Python to read/write to the system clipboard. |
-| **`spacy`** | The industrial-strength NLP library used for named entity recognition (the AI part). |
-| **`re`** | Built-in Python library for Regular Expressions (Pattern matching). |
+| **`spacy`** | Industrial-strength NLP library for Named Entity Recognition. |
+| **`colorama`** | Cross-platform colored terminal text. |
+| **`ctypes`** | (Built-in) Used to interface with Windows Kernel for drive detection. |
 
 ## 5. Constraints & Rules (Detection Logic)
 
 ### File Constraints
-- **Monitored Extensions**: The system ONLY checks files ending in:
-    - `.txt` (Text files)
-    - `.csv` (Spreadsheets/Data)
-    - `.log` (Log files)
-    - `.md` (Markdown documentation)
-    - `.py` (Python source code)
-- **Ignored**: Images, PDFs, Word docs (unless raw text readable), or directories are currently ignored to prevent errors.
+- **Monitored Extensions**: The system ONLY checks text-based files:
+    - `.txt`, `.csv`, `.log`, `.md`, `.json`, `.xml`
+- **Ignored Directories**: System folders like `.git`, `.vscode`, `__pycache__`, `.venv`, and `src` are ignored to prevent loops and errors.
+- **Performance**: Large files are read effectively, but extremely large logs might cause momentary pauses.
 
 ### Detection Rules (Triggers)
 The system flags data as "Sensitive" if it matches:
@@ -58,33 +68,36 @@ The system flags data as "Sensitive" if it matches:
 - **Keywords**: "confidential", "private", "secret", "restricted" (Case insensitive).
 
 **B. Smart Context (NLP)**
-- **PERSON**: Names of people (e.g., "John Doe", "Alice").
-- **ORG**: Companies, Agencies, Institutions (e.g., "Google", "FBI", "United Nations").
-- **GPE**: Geopolitical Entities/Countries/Cities (e.g., "New York", "France").
+- **PERSON**: Names of people (e.g., "John Doe").
+- **ORG**: Companies, Agencies (e.g., "Google", "FBI").
+- **GPE**: Countries, Cities (e.g., "Paris", "China").
 - **MONEY**: Monetary values (e.g., "$500", "1 million dollars").
 
-## 6. How to Test (Verification)
+## 6. How to Run & Use
 
-### Testing Email Detection
-To manually test if the email detection works:
-
-1.  **Start the Program**:
-    Open your terminal and run:
+### Installation
+1.  Install Python 3.x.
+2.  Install dependencies:
     ```bash
-    python main.py --path ./test_monitor
+    pip install -r requirements.txt
+    python -m spacy download en_core_web_sm
     ```
-2.  **Trigger via Clipboard**:
-    - Highlight this text: `employee@internal-base.com`
-    - Press **Ctrl+C** (Copy).
-    - **Check Terminal**: You should see:
-      `WARNING - SENSITIVE DATA DETECTED in Clipboard!`
-      `WARNING - [EMAIL] employee@internal-base.com (via Regex)`
 
-3.  **Trigger via File**:
-    - Keep the program running.
-    - Create a new file named `leaked_emails.txt` inside the `test_monitor` folder.
-    - Write inside it: `contact: boss@corp.net`.
-    - Save the file.
-    - **Check Terminal**: You should see:
-      `WARNING - SENSITIVE DATA DETECTED in file .../leaked_emails.txt!`
-      `WARNING - [EMAIL] boss@corp.net (via Regex)`
+### Running
+Open a terminal and run:
+```bash
+python main.py
+```
+
+### Command Line Arguments
+- `--external`: Enable USB monitoring immediately on startup.
+- `--path "C:/Path/To/Folder"`: specific folder to monitor.
+- `--no-user-dirs`: Disable default monitoring of Desktop, Documents, and Downloads.
+
+### Interactive Menu Controls
+Once running, you can use the menu to:
+- **[1] Add Directory**: Type a path to start watching it.
+- **[2] Remove Directory**: Stop watching a specific folder.
+- **[4] Toggle USB Scanner**: Turn external drive detection ON/OFF.
+- **[6] Start/Resume Monitoring**: Go to the active monitoring screen.
+- **Ctrl+C**: While monitoring, press Ctrl+C to pause and return to the menu.
