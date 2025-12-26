@@ -6,6 +6,7 @@ import threading
 from src.monitor import SystemMonitor
 from src.logger import logger
 from src.usb_detector import get_removable_drives
+from src.banner import show_banner
 
 def poll_usb_drives(monitor, interval=5):
     """
@@ -40,6 +41,7 @@ def poll_usb_drives(monitor, interval=5):
             time.sleep(interval)
 
 def main():
+    show_banner()
     parser = argparse.ArgumentParser(description="DLP Solution - Monitor & Detect")
     parser.add_argument("--path", type=str, default=".", help="Directory path to monitor (default: current dir)")
     parser.add_argument("--user-dirs", action="store_true", help="Monitor User Desktop, Documents, and Downloads")
