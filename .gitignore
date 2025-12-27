@@ -1,5 +1,9 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 dlp_log.log*.log *.tmpsrc/__pycache__/.env.env.*
 =======
 dlp_log.log*.log *.tmpsrc/__pycache__/.env.env.*dlp_log.log
 >>>>>>> 42fa9a3 (DLP)
+=======
+*.log *.tmpsrc/__pycache__/.env.env.*
+>>>>>>> 238253c (for rm log and cache)
