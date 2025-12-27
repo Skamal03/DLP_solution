@@ -1,1 +1,1 @@
-dlp_log.log*.log *.tmp__pycache__/.env.env.*
+dlp_log.log*.log *.tmpsrc/__pycache__/.env.env.*
