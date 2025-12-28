@@ -1,4 +1,4 @@
-watchdog
+﻿watchdog
 pyperclip
 spacy
 --extra-index-url https://download.pytorch.org/whl/cpu
@@ -6,3 +6,4 @@ torch
 transformers
 pandas
 numpy
+colorama
